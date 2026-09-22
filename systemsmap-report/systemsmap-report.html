@@ -1,33 +1,4 @@
-import { ScanReport } from '../models/index.js'
 
-export class Reporter {
-  constructor(private report: ScanReport) {}
-
-  public toJSON(): string {
-    return JSON.stringify(this.report, null, 2)
-  }
-
-  private generateMermaidGraph(): string {
-    let mermaid = 'graph TD\\n'
-    mermaid += '  App((Application Layer))\\n'
-
-
-    // Identify what layers exist based on hot zones and access sites
-    // For simplicity, we just declare the main components
-    mermaid += '  Cache[(Cache Layer)]\\n'
-    mermaid += '  DB[(Database Layer)]\\n'
-    mermaid += '  Net((Network / External))\\n'
-
-    // The connections represent the general memory hierarchy flow
-    mermaid += '  App -->|Reads/Writes| Cache\\n'
-    mermaid += '  App -->|Queries| DB\\n'
-    mermaid += '  App -->|HTTP| Net\\n'
-
-    return mermaid
-  }
-
-  public toHTML(): string {
-    const html = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -72,53 +43,44 @@ export class Reporter {
 <body>
   <h1>Systems Map Report</h1>
   <div class="summary">
-    <div class="stat"><span class="stat-label">Coverage</span><span class="stat-value">${this.report.coverage_pct}%</span></div>
-    <div class="stat"><span class="stat-label">Access Sites</span><span class="stat-value">${this.report.total_access_sites}</span></div>
-    <div class="stat"><span class="stat-label">Hot Zones</span><span class="stat-value">${this.report.hot_zones.length}</span></div>
-    <div class="stat"><span class="stat-label">Systemic Trade-offs</span><span class="stat-value">${this.report.systemic_tradeoffs?.length || 0}</span></div>
+    <div class="stat"><span class="stat-label">Coverage</span><span class="stat-value">100%</span></div>
+    <div class="stat"><span class="stat-label">Access Sites</span><span class="stat-value">2</span></div>
+    <div class="stat"><span class="stat-label">Hot Zones</span><span class="stat-value">1</span></div>
+    <div class="stat"><span class="stat-label">Systemic Trade-offs</span><span class="stat-value">0</span></div>
   </div>
 
   <div class="graph-container">
     <h2>Memory Hierarchy Flow</h2>
     <div class="mermaid">
-      ${this.generateMermaidGraph()}
+      graph TD\n  App((Application Layer))\n  Cache[(Cache Layer)]\n  DB[(Database Layer)]\n  Net((Network / External))\n  App -->|Reads/Writes| Cache\n  App -->|Queries| DB\n  App -->|HTTP| Net\n
     </div>
   </div>
 
   <h2>Systemic Trade-offs</h2>
-  ${(!this.report.systemic_tradeoffs || this.report.systemic_tradeoffs.length === 0) ? '<p>No systemic trade-offs detected.</p>' : ''}
-  ${(this.report.systemic_tradeoffs || []).map(t => `
-    <div class="tradeoff">
-       <div class="tradeoff-title">${t.title}</div>
-       <div class="tradeoff-desc">${t.description}</div>
-    </div>
-  `).join('')}
+  <p>No systemic trade-offs detected.</p>
+
 
   <h2>Hot Zones</h2>
-  ${this.report.hot_zones.length === 0 ? '<p>No hot zones detected. Great job!</p>' : ''}
 
-  ${this.report.hot_zones.map(hz => `
-    <div class="hotzone ${hz.severity_score}">
+
+
+    <div class="hotzone high">
       <div class="hz-header">
-        <span class="hz-title">${hz.anti_pattern_type}</span>
-        <span class="hz-badge badge-${hz.severity_score}">${hz.severity_score}</span>
+        <span class="hz-title">N+1 Query Pattern</span>
+        <span class="hz-badge badge-high">high</span>
       </div>
       <div class="hz-explanation">
-        ${hz.explanation ? hz.explanation.replace(/\\n/g, '<br/>') : 'No explanation provided.'}
+        A database query was detected inside a loop (depth: 1). This leads to the N+1 problem, generating excessive database round-trips. Estimated frequency multiplier: 10x.
       </div>
-      ${hz.remediation_suggestion ? `<div class="hz-remediation"><strong>Suggestion:</strong> ${hz.remediation_suggestion}</div>` : ''}
+      <div class="hz-remediation"><strong>Suggestion:</strong> Batch the query outside the loop using an IN clause, or use DataLoader/eager loading.</div>
       <div style="margin-top: 1rem;">
         <strong>Access Sites:</strong>
         <ul class="sites-list">
-          ${hz.access_site_ids.map(id => `<li>${id}</li>`).join('')}
+          <li>packages/experimental/systems-map/src/llm/index.ts:24-find</li>
         </ul>
       </div>
     </div>
-  `).join('')}
+
 
 </body>
 </html>
-`
-    return html
-  }
-}

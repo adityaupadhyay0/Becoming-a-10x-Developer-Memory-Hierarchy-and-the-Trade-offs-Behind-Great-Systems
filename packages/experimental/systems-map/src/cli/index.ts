@@ -1,5 +1,6 @@
 import { StaticAnalyzer } from '../analyzer/index.js'
 import { AntiPatternDetector } from '../detector/index.js'
+import { TradeoffAnalyzer } from '../detector/tradeoffs.js'
 import { Reporter } from '../reporter/index.js'
 import { ScanReport } from '../models/index.js'
 import * as fs from 'fs'
@@ -31,8 +32,12 @@ export async function runScan(targetDir: string, outDir: string): Promise<ScanRe
   }
 
   const result = analyzer.getResult()
+
   const detector = new AntiPatternDetector(result.accessSites)
   const hotZones = detector.detect()
+
+  const tradeoffAnalyzer = new TradeoffAnalyzer(result.accessSites)
+  const tradeoffs = tradeoffAnalyzer.analyze()
 
   const report: ScanReport = {
     scan_id: `scan-${Date.now()}`,
@@ -41,6 +46,7 @@ export async function runScan(targetDir: string, outDir: string): Promise<ScanRe
     coverage_pct: result.coveragePct,
     total_access_sites: result.accessSites.length,
     hot_zones: hotZones,
+    systemic_tradeoffs: tradeoffs,
     schema_version: '0.1.0',
   }
 

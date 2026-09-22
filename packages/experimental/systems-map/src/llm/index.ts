@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import { HotZone } from '../models/index.js'
+import { HotZone, AccessSite } from '../models/index.js'
 import type { LlmRuntime, Message } from '@deepseek-ai/dsh-llm'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import { extractText } from './utils.js'
@@ -7,13 +7,26 @@ import { extractText } from './utils.js'
 export class LlmExplainer {
   constructor(private ctx: Context) {}
 
-  public async generateExplanation(hotZone: HotZone, defaultProvider: string, defaultModel: string): Promise<void> {
+  public async generateExplanation(
+    hotZone: HotZone,
+    accessSites: AccessSite[],
+    defaultProvider: string,
+    defaultModel: string,
+  ): Promise<void> {
     const llm = this.ctx.get('llm') as unknown as LlmRuntime
 
     if (!llm) {
       console.warn('LLM service not found. Cannot generate explanation.')
       return
     }
+
+    const sitesContext = hotZone.access_site_ids.map((id) => {
+      const site = accessSites.find(s => s.id === id)
+      if (site) {
+        return `- Location: ${site.file}:${site.line}\n- Snippet:\n\`\`\`javascript\n${site.code_snippet}\n\`\`\`\n`
+      }
+      return ''
+    }).join('\n')
 
     const prompt = `
 You are an expert systems architect analyzing a performance Hot Zone in a codebase.
@@ -25,9 +38,12 @@ Hot Zone Details:
 - Severity: ${hotZone.severity_score}
 - Static Explanation: ${hotZone.explanation}
 
+Source Code Context:
+${sitesContext}
+
 Provide a natural-language explanation classifying it as one of: a real trade-off, a violated constraint, or a likely false dichotomy.
-Suggest a candidate remediation pattern.
-Keep it strictly grounded to these facts. Do not invent any numbers. Output in simple text.
+Suggest a concrete, code-specific candidate remediation pattern referencing the specific variables or functions in the snippet.
+Keep it strictly grounded to these facts. Do not invent any numbers. Output in simple markdown text.
 `
 
     const messageId = 'msg-1' as Branded<'MessageId'>
@@ -46,7 +62,7 @@ Keep it strictly grounded to these facts. Do not invent any numbers. Output in s
         provider: defaultProvider,
         model: defaultModel,
         messages,
-        maxTokens: 500,
+        maxTokens: 600,
         temperature: 0.1,
       })
 

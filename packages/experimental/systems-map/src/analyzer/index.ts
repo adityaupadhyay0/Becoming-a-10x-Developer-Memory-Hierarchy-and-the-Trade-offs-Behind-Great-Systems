@@ -20,7 +20,7 @@ export class StaticAnalyzer {
       true,
     )
 
-    this.visitNode(sourceFile, sourceFile, false)
+    this.visitNode(sourceFile, sourceFile, 0)
   }
 
   public getResult(): AnalysisResult {
@@ -31,21 +31,40 @@ export class StaticAnalyzer {
     }
   }
 
-  private visitNode(node: ts.Node, sourceFile: ts.SourceFile, inLoop: boolean): void {
+  private isHigherOrderLoop(node: ts.CallExpression): boolean {
+    if (ts.isPropertyAccessExpression(node.expression)) {
+      const name = node.expression.name.text
+      if (name === 'map' || name === 'forEach' || name === 'filter' || name === 'reduce') {
+        return true
+      }
+    }
+    return false
+  }
+
+  private visitNode(node: ts.Node, sourceFile: ts.SourceFile, loopDepth: number): void {
     this.totalNodes++
 
+    let currentLoopDepth = loopDepth
+
     // Check if we are entering a loop
-    const isLoop =
+    const isStandardLoop =
       ts.isForStatement(node) ||
       ts.isForInStatement(node) ||
       ts.isForOfStatement(node) ||
       ts.isWhileStatement(node) ||
       ts.isDoStatement(node)
 
-    const currentInLoop = inLoop || isLoop
+    let isHOF = false
+    if (ts.isCallExpression(node)) {
+      isHOF = this.isHigherOrderLoop(node)
+    }
+
+    if (isStandardLoop || isHOF) {
+      currentLoopDepth += 1
+    }
 
     if (ts.isCallExpression(node)) {
-      const site = this.analyzeCallExpression(node, sourceFile, currentInLoop)
+      const site = this.analyzeCallExpression(node, sourceFile, currentLoopDepth)
       if (site) {
         this.accessSites.push(site)
       }
@@ -57,10 +76,21 @@ export class StaticAnalyzer {
       this.totalNodes--
     }
 
-    ts.forEachChild(node, child => this.visitNode(child, sourceFile, currentInLoop))
+    ts.forEachChild(node, child => this.visitNode(child, sourceFile, currentLoopDepth))
   }
 
-  private analyzeCallExpression(node: ts.CallExpression, sourceFile: ts.SourceFile, inLoop: boolean): AccessSite | null {
+  private extractSnippet(sourceFile: ts.SourceFile, node: ts.Node): string {
+    const startLine = sourceFile.getLineAndCharacterOfPosition(node.getStart()).line
+    const lines = sourceFile.text.split('\n')
+
+    // Extract 3 lines before and 3 lines after
+    const start = Math.max(0, startLine - 3)
+    const end = Math.min(lines.length - 1, startLine + 3)
+
+    return lines.slice(start, end + 1).join('\n')
+  }
+
+  private analyzeCallExpression(node: ts.CallExpression, sourceFile: ts.SourceFile, loopDepth: number): AccessSite | null {
     const expression = node.expression
     let name = ''
 
@@ -97,12 +127,14 @@ export class StaticAnalyzer {
 
     if (type && layer) {
       const id = `${sourceFile.fileName}:${line}-${name}`
-      const estimated_frequency = inLoop ? 100 : 1
+      const estimated_frequency = loopDepth > 0 ? Math.pow(10, loopDepth) : 1
 
       let estimated_latency = 10
       if (layer === 'cache') estimated_latency = 5
       if (layer === 'database') estimated_latency = 50
       if (layer === 'network') estimated_latency = 200
+
+      const snippet = this.extractSnippet(sourceFile, node)
 
       const site: AccessSite = {
         id,
@@ -114,6 +146,8 @@ export class StaticAnalyzer {
         measured_frequency: null,
         estimated_latency,
         measured_latency: null,
+        loop_depth: loopDepth,
+        code_snippet: snippet,
       }
 
       if (detectedLibrary) {
