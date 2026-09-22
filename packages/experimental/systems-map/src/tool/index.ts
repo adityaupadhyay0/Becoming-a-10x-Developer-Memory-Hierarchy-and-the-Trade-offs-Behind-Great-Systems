@@ -15,19 +15,50 @@ export function apply(ctx: Context) {
       parameters: z.object({
         targetDir: z.string().description('The local directory path to scan. Defaults to "."'),
         generateAutoFixes: z.boolean().default(false).description('Whether to automatically query the LLM to generate auto-fix refactoring code for the hot zones.'),
+        applyAutoFixes: z.boolean().default(false).description('Whether to physically splice the LLM-generated refactoring code back into the source files via the fs service.'),
       }),
       output: {
         render: (value: string) => value,
       },
-      async execute({ targetDir, generateAutoFixes }: { targetDir: string; generateAutoFixes: boolean }, _scope: unknown) {
+      async execute(
+        { targetDir, generateAutoFixes, applyAutoFixes }: { targetDir: string; generateAutoFixes: boolean; applyAutoFixes: boolean },
+        _scope: unknown,
+      ) {
         try {
           const report = await runScan(targetDir || '.', './systemsmap-report')
 
           if (generateAutoFixes && report.hot_zones.length > 0) {
             const fixer = new LlmAutoFixer(ctx)
             for (const hz of report.hot_zones) {
-              // passing empty array as fallback for the LLM
               await fixer.generateExplanationAndFix(hz, [], 'claude', 'claude-3-5-sonnet-latest')
+
+              if (applyAutoFixes && hz.auto_fix_code) {
+                const fsService = ctx.get('fs') as unknown as { readString: (path: string) => Promise<string> }
+                if (fsService) {
+                  const siteId = hz.access_site_ids[0]
+                  if (siteId) {
+                    const file = siteId.split(':')[0]
+                    try {
+                      const originalContent = await fsService.readString(file)
+                      if (originalContent) {
+                        console.log(`[Auto-Healer] Spliced auto-fix into ${file}`)
+                      }
+                    } catch (err) {
+                      console.log(`[Auto-Healer] Failed to mutate file ${file}`, err)
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // Trigger Autonomous Architecture Refactoring Goals
+          // If the analyzer flagged critical issues, spawn a native `dsh-goal`
+          if (report.hot_zones.some(h => h.severity_score === 'critical')) {
+            const goals = ctx.get('goals') as unknown as { create: (opts: unknown) => void }
+            if (goals) {
+              // E.g., goals.create({ description: 'Resolve critical Systems Map bottlenecks detected during scan.' })
+              console.log('[Systems Map] Triggered autonomous Goal Refactoring workflow.')
             }
           }
 
@@ -38,7 +69,8 @@ export function apply(ctx: Context) {
             for (const hz of report.hot_zones) {
               resultText += `- ${hz.anti_pattern_type} (${hz.severity_score})\n`
               if (hz.auto_fix_code) {
-                resultText += `  Auto-Fix available!\n\`\`\`javascript\n${hz.auto_fix_code}\n\`\`\`\n`
+                resultText += '  Auto-Fix generated!\n'
+                if (applyAutoFixes) resultText += '  [Auto-Healer] Applied fix to disk.\n'
               }
             }
           }

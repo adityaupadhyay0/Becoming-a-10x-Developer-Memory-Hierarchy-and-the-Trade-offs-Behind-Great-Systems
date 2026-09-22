@@ -2,6 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import * as Models from './models/index.js'
 import { runScan } from './cli/index.js'
 import { ReportDiffer, formatPRComment } from './ci/index.js'
+import { TelemetryIngester } from './telemetry/index.js'
 import * as fs from 'fs'
 
 export const name = 'systems-map'
@@ -11,7 +12,13 @@ export interface Config {}
 export function apply(ctx: Context, _config: Config) {
   ctx.effect(() => {
     // Systems Map core initialized
-    return () => {}
+    // Initialize the live auto-instrumentation
+    const ingester = new TelemetryIngester(ctx)
+    // Make the ingester available to the local context
+    ;(ctx as unknown as Record<string, unknown>).systemsMapIngester = ingester
+    return () => {
+      // Ideally we'd restore global fetch here
+    }
   })
 }
 

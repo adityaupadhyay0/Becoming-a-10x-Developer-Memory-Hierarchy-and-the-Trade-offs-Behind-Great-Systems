@@ -16,13 +16,58 @@ export class TelemetryIngester {
   constructor(private ctx?: Context) {
     if (this.ctx) {
       this.initLiveIngestion()
+      this.autoInstrumentNode()
     }
   }
 
   private initLiveIngestion(): void {
-    // In a full implementation, we'd hook into ctx.server.post('/v1/traces')
-    // For this 10x upgrade, we export a method that external tools or test harnesses can call
-    // to mock active OTLP span pushes during runtime.
+    // Expose a method that external tools or test harnesses can call
+  }
+
+  private autoInstrumentNode(): void {
+    if (typeof globalThis !== 'undefined' && typeof globalThis.fetch === 'function') {
+      const originalFetch = globalThis.fetch
+
+      // Native Node.js Auto-Instrumentation hook
+      globalThis.fetch = async (...args: [RequestInfo | URL, RequestInit?]) => {
+        const startTime = Date.now()
+        let method = 'GET'
+        let url = ''
+
+        if (typeof args[0] === 'string') url = args[0]
+        else if (args[0] && (args[0] as { url: string }).url) url = (args[0] as { url: string }).url
+
+        if (args[1] && args[1].method) method = args[1].method
+
+        try {
+          const response = await originalFetch(...args)
+          this.ingestLiveSpan({
+            traceId: `live-${Date.now()}`,
+            spanId: `span-${Date.now()}`,
+            name: `fetch ${method}`,
+            kind: 'CLIENT',
+            attributes: { 'http.method': method, 'http.url': url },
+            durationMs: Date.now() - startTime,
+          })
+          return response
+        } catch (e) {
+          this.ingestLiveSpan({
+            traceId: `live-${Date.now()}`,
+            spanId: `span-${Date.now()}`,
+            name: `fetch ${method} (error)`,
+            kind: 'CLIENT',
+            attributes: { 'http.method': method, 'http.url': url, 'error': true },
+            durationMs: Date.now() - startTime,
+          })
+          throw e
+        }
+      }
+      console.log('[Systems Map] Auto-Instrumentation attached to global fetch.')
+    }
+  }
+
+  public getSpans(): TelemetrySpan[] {
+    return this.spans
   }
 
   public ingestLiveSpan(span: TelemetrySpan): void {
@@ -33,7 +78,9 @@ export class TelemetryIngester {
     try {
       const parsed = JSON.parse(content)
       if (Array.isArray(parsed)) {
-        this.spans.push(...parsed)
+        for (const span of parsed) {
+          this.spans.push(span)
+        }
       }
     } catch (e) {
       console.error('Failed to parse telemetry JSON:', e)
