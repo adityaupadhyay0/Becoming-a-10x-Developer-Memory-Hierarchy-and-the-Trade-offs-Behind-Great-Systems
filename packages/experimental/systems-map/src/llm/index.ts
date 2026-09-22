@@ -4,10 +4,10 @@ import type { LlmRuntime, Message } from '@deepseek-ai/dsh-llm'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import { extractText } from './utils.js'
 
-export class LlmExplainer {
+export class LlmAutoFixer {
   constructor(private ctx: Context) {}
 
-  public async generateExplanation(
+  public async generateExplanationAndFix(
     hotZone: HotZone,
     accessSites: AccessSite[],
     defaultProvider: string,
@@ -16,7 +16,7 @@ export class LlmExplainer {
     const llm = this.ctx.get('llm') as unknown as LlmRuntime
 
     if (!llm) {
-      console.warn('LLM service not found. Cannot generate explanation.')
+      console.warn('LLM service not found. Cannot generate auto-fix.')
       return
     }
 
@@ -41,9 +41,12 @@ Hot Zone Details:
 Source Code Context:
 ${sitesContext}
 
-Provide a natural-language explanation classifying it as one of: a real trade-off, a violated constraint, or a likely false dichotomy.
-Suggest a concrete, code-specific candidate remediation pattern referencing the specific variables or functions in the snippet.
-Keep it strictly grounded to these facts. Do not invent any numbers. Output in simple markdown text.
+Tasks:
+1. Provide a brief explanation classifying the Hot Zone (trade-off, constraint, or false dichotomy).
+2. Look at the Source Code Snippet and generate the exact code needed to refactor and fix the bottleneck. (e.g. converting a synchronous loop into a batched Promise.all or using a DataLoader).
+3. Output the exact rewrite wrapped in a markdown code block starting with \`\`\`javascript (or typescript) and ending with \`\`\`.
+
+Ensure the code rewrite uses the actual variables from the provided snippet.
 `
 
     const messageId = 'msg-1' as Branded<'MessageId'>
@@ -62,17 +65,25 @@ Keep it strictly grounded to these facts. Do not invent any numbers. Output in s
         provider: defaultProvider,
         model: defaultModel,
         messages,
-        maxTokens: 600,
+        maxTokens: 1200, // Increased to accommodate code generation
         temperature: 0.1,
       })
 
       const fullText = await extractText(stream)
       if (fullText) {
-        hotZone.explanation = fullText
+        // Simple extraction heuristic for the markdown block
+        const codeBlockRegex = /```(?:javascript|typescript)?\n([\s\S]*?)\n```/
+        const match = fullText.match(codeBlockRegex)
+
+        hotZone.explanation = fullText.replace(codeBlockRegex, '').trim()
+
+        if (match && match[1]) {
+          hotZone.auto_fix_code = match[1].trim()
+        }
       }
 
     } catch (e) {
-      console.error('Failed to generate LLM explanation:', e)
+      console.error('Failed to generate LLM explanation and fix:', e)
     }
   }
 }

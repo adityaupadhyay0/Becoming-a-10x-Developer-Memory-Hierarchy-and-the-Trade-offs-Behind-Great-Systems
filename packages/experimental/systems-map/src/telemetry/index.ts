@@ -1,4 +1,5 @@
 import { AccessSite } from '../models/index.js'
+import { Context } from '@deepseek-ai/cordis'
 
 export interface TelemetrySpan {
   traceId: string
@@ -12,6 +13,21 @@ export interface TelemetrySpan {
 export class TelemetryIngester {
   private spans: TelemetrySpan[] = []
 
+  constructor(private ctx?: Context) {
+    if (this.ctx) {
+      this.initLiveIngestion()
+    }
+  }
+
+  private initLiveIngestion(): void {
+    // In a full implementation, we'd hook into ctx.server.post('/v1/traces')
+    // For this 10x upgrade, we export a method that external tools or test harnesses can call
+    // to mock active OTLP span pushes during runtime.
+  }
+
+  public ingestLiveSpan(span: TelemetrySpan): void {
+    this.spans.push(span)
+  }
 
   public ingestJsonFile(content: string): void {
     try {

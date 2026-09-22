@@ -36,6 +36,7 @@ export interface HotZone {
   severity_score: SeverityScore
   explanation: string | null
   remediation_suggestion: string | null
+  auto_fix_code?: string | null // Generated AST rewrite via LLM
   acknowledged: boolean
 }
 

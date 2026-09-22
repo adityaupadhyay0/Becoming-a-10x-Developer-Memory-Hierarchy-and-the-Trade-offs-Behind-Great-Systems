@@ -22,6 +22,12 @@
     },
     {
       "path": "../../util/brand"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
+      "path": "../../core/scope"
     }
   ]
 }

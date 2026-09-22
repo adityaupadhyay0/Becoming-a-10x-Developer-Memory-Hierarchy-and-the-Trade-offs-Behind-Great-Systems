@@ -128,6 +128,7 @@ export class Reporter {
         ${hz.explanation ? hz.explanation.replace(/\\n/g, '<br/>') : 'No explanation provided.'}
       </div>
       ${hz.remediation_suggestion ? `<div class="hz-remediation"><strong>Suggestion:</strong> ${hz.remediation_suggestion}</div>` : ''}
+      ${hz.auto_fix_code ? `<div style="margin-top: 1rem;"><strong>Auto-Fix Code:</strong><pre style="background: #1f2937; color: #f8fafc; padding: 1rem; border-radius: 0.5rem; overflow-x: auto;"><code>${hz.auto_fix_code}</code></pre></div>` : ''}
       <div style="margin-top: 1rem;">
         <strong>Access Sites:</strong>
         <ul class="sites-list">
