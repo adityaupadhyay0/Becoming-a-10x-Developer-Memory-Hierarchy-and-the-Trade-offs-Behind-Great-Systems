@@ -1,6 +1,7 @@
 import { StaticAnalyzer } from '../analyzer/index.js'
 import { AntiPatternDetector } from '../detector/index.js'
 import { TradeoffAnalyzer } from '../detector/tradeoffs.js'
+import { CriticalPathProfiler } from '../detector/profiler.js'
 import { Reporter } from '../reporter/index.js'
 import { ScanReport } from '../models/index.js'
 import * as fs from 'fs'
@@ -39,6 +40,9 @@ export async function runScan(targetDir: string, outDir: string): Promise<ScanRe
   const tradeoffAnalyzer = new TradeoffAnalyzer(result.accessSites)
   const tradeoffs = tradeoffAnalyzer.analyze()
 
+  const profiler = new CriticalPathProfiler(result.accessSites)
+  const criticalPaths = profiler.profile()
+
   const report: ScanReport = {
     scan_id: `scan-${Date.now()}`,
     timestamp: new Date().toISOString(),
@@ -47,6 +51,7 @@ export async function runScan(targetDir: string, outDir: string): Promise<ScanRe
     total_access_sites: result.accessSites.length,
     hot_zones: hotZones,
     systemic_tradeoffs: tradeoffs,
+    critical_paths: criticalPaths,
     schema_version: '0.1.0',
   }
 

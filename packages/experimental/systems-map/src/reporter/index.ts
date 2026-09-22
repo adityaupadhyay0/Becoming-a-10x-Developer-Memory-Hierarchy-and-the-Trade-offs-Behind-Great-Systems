@@ -23,6 +23,13 @@ export class Reporter {
     mermaid += '  App -->|Queries| DB\\n'
     mermaid += '  App -->|HTTP| Net\\n'
 
+    // Dynamically inject cross-file calls if we have critical paths
+    if (this.report.critical_paths) {
+      for (const path of this.report.critical_paths) {
+        mermaid += `  ${path.entry_function}((${path.entry_function})) -->|Path Latency: ${path.theoretical_latency_ms}ms| App\\n`
+      }
+    }
+
     return mermaid
   }
 
@@ -66,6 +73,8 @@ export class Reporter {
     .tradeoff-title { font-weight: bold; font-size: 1.125rem; margin-bottom: 0.5rem; }
     .tradeoff-desc { color: #4b5563; line-height: 1.5; }
 
+    .critical-path { background: white; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 4px solid #8b5cf6; }
+
     .sites-list { list-style: none; padding: 0; font-size: 0.875rem; color: #4b5563; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
   </style>
 </head>
@@ -91,6 +100,18 @@ export class Reporter {
     <div class="tradeoff">
        <div class="tradeoff-title">${t.title}</div>
        <div class="tradeoff-desc">${t.description}</div>
+    </div>
+  `).join('')}
+
+  <h2>Critical Paths</h2>
+  ${(!this.report.critical_paths || this.report.critical_paths.length === 0) ? '<p>No critical latency paths detected.</p>' : ''}
+  ${(this.report.critical_paths || []).map(p => `
+    <div class="critical-path">
+       <div class="tradeoff-title">${p.entry_function} (Est. ${p.theoretical_latency_ms}ms)</div>
+       <div class="tradeoff-desc">Sequential bottlenecks: ${p.bottleneck_sites.length}</div>
+       <ul class="sites-list">
+          ${p.bottleneck_sites.map(id => `<li>${id}</li>`).join('')}
+        </ul>
     </div>
   `).join('')}
 

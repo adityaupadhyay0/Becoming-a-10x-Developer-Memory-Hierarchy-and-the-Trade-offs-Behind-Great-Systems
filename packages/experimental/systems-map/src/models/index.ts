@@ -1,6 +1,6 @@
 export type Layer = 'in-memory' | 'cache' | 'database' | 'network'
 
-export type AccessSiteType = 'query' | 'cache' | 'network' | 'loop'
+export type AccessSiteType = 'query' | 'cache' | 'network' | 'loop' | 'compute'
 
 export interface AccessSite {
   id: string
@@ -15,6 +15,8 @@ export interface AccessSite {
   measured_latency: number | null
   code_snippet?: string
   loop_depth: number
+  parent_function?: string
+  called_functions?: string[] // Used for tracking cross-file AST calls
 }
 
 export type DataNodeKind = 'table' | 'cache-namespace' | 'external-host'
@@ -41,8 +43,14 @@ export interface SystemicTradeoff {
   id: string
   title: string
   description: string
-  category: 'consistency-vs-availability' | 'simplicity-vs-throughput' | 'memory-vs-compute'
+  category: 'consistency-vs-availability' | 'simplicity-vs-throughput' | 'memory-vs-compute' | 'coupling-vs-coordination' | 'spatial-locality'
   evidence_site_ids: string[]
+}
+
+export interface CriticalPath {
+  entry_function: string
+  theoretical_latency_ms: number
+  bottleneck_sites: string[]
 }
 
 export interface ScanReport {
@@ -53,5 +61,6 @@ export interface ScanReport {
   total_access_sites: number
   hot_zones: HotZone[]
   systemic_tradeoffs: SystemicTradeoff[]
+  critical_paths?: CriticalPath[]
   schema_version: string
 }
