@@ -2,6 +2,13 @@ export type Layer = 'in-memory' | 'cache' | 'database' | 'network'
 
 export type AccessSiteType = 'query' | 'cache' | 'network' | 'loop' | 'compute'
 
+export interface DbExecutionPlan {
+  hasSeqScan: boolean
+  estimatedCost: number
+  rawPlan: string
+  suggestedIndex?: string
+}
+
 export interface AccessSite {
   id: string
   file: string
@@ -17,6 +24,7 @@ export interface AccessSite {
   loop_depth: number
   parent_function?: string
   called_functions?: string[] // Used for tracking cross-file AST calls
+  execution_plan?: DbExecutionPlan // Captured via EXPLAIN ANALYZE introspection
 }
 
 export type DataNodeKind = 'table' | 'cache-namespace' | 'external-host'
